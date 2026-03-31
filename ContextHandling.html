@@ -155,11 +155,19 @@
         }
 
         .message-item.own-message .message-bubble {
-            background: #dcf8c6;
+            background: #ffffff;
         }
 
         .message-item.own-message .message-bubble::before {
-            border-right-color: #dcf8c6;
+            border-right-color: #ffffff;
+        }
+
+        .message-item.atri-message .message-bubble {
+            background: #e3f2fd;
+        }
+
+        .message-item.atri-message .message-bubble::before {
+            border-right-color: #e3f2fd;
         }
 
         .message-text {
@@ -573,9 +581,9 @@
             
             <div class="file-selector">
                 <select id="fileSelect" disabled title="选择 JSONL 文件">
-                    <option>请先选择 2-Extracted 目录</option>
+                    <option>请先选择 3-Divided 目录</option>
                 </select>
-                <button class="btn-select-dir" onclick="selectDirectory()">选择 2-Extracted 目录</button>
+                <button class="btn-select-dir" onclick="selectDirectory()">选择 3-Divided 目录</button>
             </div>
 
             <div class="chat-container" id="chatContainer">
@@ -613,7 +621,7 @@
                 </button>
                 <button class="op-btn op-btn-info" id="saveBtn" onclick="saveToCleansing()" disabled>
                     <span>💾</span>
-                    <span>保存到 3-Cleansing</span>
+                    <span>保存到 4-Cleansing</span>
                 </button>
             </div>
 
@@ -649,7 +657,7 @@
                     <li>合并操作会将选中的消息文本连接在一起</li>
                     <li>合并后第一条消息保留，其余被删除</li>
                     <li>可随时撤销上次的合并或删除操作</li>
-                    <li>处理完成后保存到 3-Cleansing 目录</li>
+                    <li>处理完成后保存到 4-Cleansing 目录</li>
                 </ul>
             </div>
 
@@ -738,15 +746,15 @@
         // 选择目录
         async function selectDirectory() {
             try {
-                // 请求用户选择 2-Extracted 目录
+                // 请求用户选择 3-Divided 目录
                 const dirHandle = await window.showDirectoryPicker();
                 currentDirectory = dirHandle;
                 
-                // 检查目录名是否包含 "Extracted"
+                // 检查目录名是否包含 "Divided"
                 const dirName = dirHandle.name;
-                if (!dirName.includes('Extracted')) {
+                if (!dirName.includes('Divided')) {
                     showModal('⚠️ 警告', 
-                        `您选择的目录是 "${dirName}"，建议命名为 "2-Extracted"。\n\n是否继续？`, 
+                        `您选择的目录是 "${dirName}"，建议命名为 "3-Divided"。\n\n是否继续？`, 
                         [
                             { text: '重新选择', action: () => { currentDirectory = null; closeModal(); } },
                             { text: '继续', action: () => { closeModal(); loadFilesFromDirectory(); } }
@@ -757,9 +765,9 @@
                 
                 await loadFilesFromDirectory();
                 
-                // 尝试获取或请求 3-Cleansing 目录
+                // 尝试获取或请求 4-Cleansing 目录
                 try {
-                    // 尝试在同级目录找 3-Cleansing
+                    // 尝试在同级目录找 4-Cleansing
                     const parentHandle = await dirHandle.getParent?.();
                     if (parentHandle) {
                         for await (const entry of parentHandle.values()) {
@@ -770,7 +778,7 @@
                         }
                     }
                 } catch (e) {
-                    console.log('无法自动定位 3-Cleansing 目录');
+                    console.log('无法自动定位 4-Cleansing 目录');
                 }
                 
             } catch (err) {
@@ -963,9 +971,10 @@
                 // 判断是否是连续相同发送者的消息
                 const prevMsg = getPreviousVisibleMessage(index);
                 const isOwn = prevMsg && prevMsg.name === msg.name;
+                const isAtri = msg.name === '亚托莉';
                 
                 html += `
-                    <div class="message-item ${isSelected ? 'selected' : ''} ${isOwn ? 'own-message' : ''}" 
+                    <div class="message-item ${isSelected ? 'selected' : ''} ${isOwn ? 'own-message' : ''} ${isAtri ? 'atri-message' : ''}" 
                          data-index="${index}"
                          onclick="handleMessageClick(event, ${index})">
                         <span class="message-index">${visibleCount}</span>
@@ -1217,7 +1226,7 @@
             outputPreview.innerHTML = html;
         }
 
-        // 保存到 3-Cleansing
+        // 保存到 4-Cleansing
         async function saveToCleansing() {
             const visibleMessages = messages.filter(m => !m.deleted);
             if (visibleMessages.length === 0) {
@@ -1258,7 +1267,7 @@
                 await writable.close();
                 
                 updateStatus(`已保存: ${newName}`, 'success');
-                showModal('✅ 保存成功', `文件已保存到 3-Cleansing 目录:\\n${newName}`);
+                showModal('✅ 保存成功', `文件已保存到 4-Cleansing 目录:\\n${newName}`);
                 
             } catch (err) {
                 // 如果 API 不支持，提供下载
@@ -1438,7 +1447,7 @@
         });
 
         // 初始化
-        updateStatus('请选择 2-Extracted 目录');
+        updateStatus('请选择 3-Divided 目录');
     </script>
 </body>
 </html>
