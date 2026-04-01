@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>消息清洗</title>
+    <title>JSONL 消息排序编辑器</title>
     <style>
         * {
             margin: 0;
@@ -94,20 +94,59 @@
             display: flex;
             align-items: flex-start;
             margin-bottom: 12px;
-            cursor: pointer;
             padding: 8px;
             border-radius: 8px;
             transition: all 0.2s;
             position: relative;
+            background: white;
+            border: 2px solid transparent;
+            cursor: move;
         }
 
         .message-item:hover {
             background: rgba(52, 152, 219, 0.08);
+            border-color: #3498db;
         }
 
-        .message-item.selected {
-            background: rgba(52, 152, 219, 0.15);
-            box-shadow: 0 0 0 2px #3498db;
+        .message-item.dragging {
+            opacity: 0.5;
+            background: #e3f2fd;
+            border: 2px dashed #2196f3;
+        }
+
+        .message-item.drag-over {
+            border-top: 3px solid #2196f3;
+            margin-top: 5px;
+        }
+
+        .message-item.editing {
+            background: #fff3e0;
+            border-color: #ff9800;
+        }
+
+        .message-item.atri-message {
+            background: #e3f2fd;
+            border-color: #2196f3;
+            border-left: 4px solid #2196f3;
+        }
+
+        .message-item.atri-message .message-bubble {
+            background: #bbdefb;
+            border-color: #64b5f6;
+        }
+
+        .drag-handle {
+            margin-right: 8px;
+            margin-top: 4px;
+            color: #bbb;
+            cursor: grab;
+            font-size: 14px;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .drag-handle:active {
+            cursor: grabbing;
         }
 
         .message-checkbox {
@@ -140,38 +179,20 @@
             word-wrap: break-word;
             box-shadow: 0 1px 2px rgba(0,0,0,0.08);
             position: relative;
-        }
-
-        .message-bubble::before {
-            content: '';
-            position: absolute;
-            left: -6px;
-            top: 8px;
-            width: 0;
-            height: 0;
-            border-top: 6px solid transparent;
-            border-bottom: 6px solid transparent;
-            border-right: 6px solid white;
-        }
-
-        .message-item.own-message .message-bubble {
-            background: #ffffff;
-        }
-
-        .message-item.own-message .message-bubble::before {
-            border-right-color: #ffffff;
-        }
-
-        .message-item.atri-message .message-bubble {
-            background: #e3f2fd;
-        }
-
-        .message-item.atri-message .message-bubble::before {
-            border-right-color: #e3f2fd;
+            border: 1px solid #e0e0e0;
         }
 
         .message-text {
             color: #333;
+            outline: none;
+            min-height: 1.5em;
+        }
+
+        .message-text:focus {
+            background: #fffde7;
+            padding: 4px;
+            margin: -4px;
+            border-radius: 4px;
         }
 
         .message-image {
@@ -185,6 +206,48 @@
             margin-right: 8px;
             min-width: 30px;
             text-align: right;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .message-actions {
+            display: flex;
+            gap: 5px;
+            margin-left: 8px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .message-item:hover .message-actions {
+            opacity: 1;
+        }
+
+        .msg-btn {
+            width: 24px;
+            height: 24px;
+            border: none;
+            background: #f0f0f0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .msg-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .msg-btn.edit-btn:hover {
+            background: #3498db;
+            color: white;
+        }
+
+        .msg-btn.delete-btn:hover {
+            background: #e74c3c;
+            color: white;
         }
 
         /* 中间面板 - 操作按钮 */
@@ -223,15 +286,6 @@
             background: #219a52;
         }
 
-        .op-btn-danger {
-            background: #e74c3c;
-            color: white;
-        }
-
-        .op-btn-danger:hover:not(:disabled) {
-            background: #c0392b;
-        }
-
         .op-btn-secondary {
             background: #95a5a6;
             color: white;
@@ -248,6 +302,15 @@
 
         .op-btn-info:hover:not(:disabled) {
             background: #2980b9;
+        }
+
+        .op-btn-warning {
+            background: #f39c12;
+            color: white;
+        }
+
+        .op-btn-warning:hover:not(:disabled) {
+            background: #e67e22;
         }
 
         .stats {
@@ -363,15 +426,9 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
 
-        .output-item.merged {
-            border-left-color: #f39c12;
-            background: #fffbf0;
-        }
-
-        .output-item.deleted {
-            border-left-color: #e74c3c;
-            opacity: 0.6;
-            text-decoration: line-through;
+        .output-item.edited {
+            border-left-color: #ff9800;
+            background: #fff8e1;
         }
 
         .output-item-raw {
@@ -446,6 +503,10 @@
 
         .status-info {
             color: #3498db;
+        }
+
+        .status-warning {
+            color: #f39c12;
         }
 
         /* 模态框 */
@@ -531,42 +592,21 @@
             background: #95a5a6;
         }
 
-        /* 加载状态 */
-        .loading {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 1s ease-in-out infinite;
+        /* 编辑指示器 */
+        .edit-indicator {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #ff9800;
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            display: none;
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* 合并预览 */
-        .merge-preview {
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            border-radius: 6px;
-            padding: 12px;
-            margin: 15px;
-            font-size: 12px;
-        }
-
-        .merge-preview-title {
-            font-weight: 600;
-            color: #856404;
-            margin-bottom: 8px;
-        }
-
-        .merge-preview-content {
-            color: #856404;
-            line-height: 1.5;
-            max-height: 100px;
-            overflow-y: auto;
+        .message-item.editing .edit-indicator {
+            display: block;
         }
     </style>
 </head>
@@ -576,14 +616,14 @@
         <div class="panel left-panel">
             <div class="panel-header">
                 <span>📁</span>
-                <span>源文件消息</span>
+                <span>源文件消息（可拖拽排序/点击编辑）</span>
             </div>
             
             <div class="file-selector">
                 <select id="fileSelect" disabled title="选择 JSONL 文件">
-                    <option>请先选择 3-Divided 目录</option>
+                    <option>请先选择 4-Cleansing 目录</option>
                 </select>
-                <button class="btn-select-dir" onclick="selectDirectory()">选择 3-Divided 目录</button>
+                <button class="btn-select-dir" onclick="selectDirectory()">选择 4-Cleansing\Translate 目录</button>
             </div>
 
             <div class="chat-container" id="chatContainer">
@@ -607,27 +647,22 @@
             </div>
             
             <div class="operations">
-                <button class="op-btn op-btn-primary" id="mergeBtn" onclick="mergeSelected()" disabled>
-                    <span>🔄</span>
-                    <span>合并选中消息</span>
-                </button>
-                <button class="op-btn op-btn-danger" id="deleteBtn" onclick="deleteSelected()" disabled>
-                    <span>🗑️</span>
-                    <span>删除选中消息</span>
+                <button class="op-btn op-btn-primary" id="saveBtn" onclick="saveToOrdered()" disabled>
+                    <span>💾</span>
+                    <span>保存到 5-Ordered</span>
                 </button>
                 <button class="op-btn op-btn-secondary" id="undoBtn" onclick="undoLastAction()" disabled>
                     <span>↩️</span>
-                    <span>撤销上次操作</span>
+                    <span>撤销</span>
                 </button>
-                <button class="op-btn op-btn-info" id="saveBtn" onclick="saveToCleansing()" disabled>
-                    <span>💾</span>
-                    <span>保存到 4-Cleansing</span>
+                <button class="op-btn op-btn-secondary" id="redoBtn" onclick="redoLastAction()" disabled>
+                    <span>↪️</span>
+                    <span>重做</span>
                 </button>
-            </div>
-
-            <div id="mergePreview" class="merge-preview" style="display: none;">
-                <div class="merge-preview-title">合并预览</div>
-                <div class="merge-preview-content" id="mergePreviewContent"></div>
+                <button class="op-btn op-btn-warning" id="resetBtn" onclick="resetOrder()" disabled>
+                    <span>🔄</span>
+                    <span>恢复原始顺序</span>
+                </button>
             </div>
 
             <div class="stats">
@@ -637,43 +672,46 @@
                     <span class="stat-value" id="statTotal">0</span>
                 </div>
                 <div class="stat-item">
-                    <span>已选中</span>
-                    <span class="stat-value" id="statSelected">0</span>
+                    <span>已编辑</span>
+                    <span class="stat-value" id="statEdited">0</span>
                 </div>
                 <div class="stat-item">
-                    <span>合并操作数</span>
-                    <span class="stat-value" id="statMerged">0</span>
+                    <span>已重新排序</span>
+                    <span class="stat-value" id="statReordered">否</span>
                 </div>
                 <div class="stat-item">
-                    <span>删除操作数</span>
-                    <span class="stat-value" id="statDeleted">0</span>
+                    <span>历史记录</span>
+                    <span class="stat-value" id="statHistory">0</span>
                 </div>
             </div>
 
             <div class="help-text">
                 <h4>💡 使用说明</h4>
                 <ul>
-                    <li>点击左侧消息前的复选框进行多选</li>
-                    <li>合并操作会将选中的消息文本连接在一起</li>
-                    <li>合并后第一条消息保留，其余被删除</li>
-                    <li>可随时撤销上次的合并或删除操作</li>
-                    <li>处理完成后保存到 4-Cleansing 目录</li>
+                    <li><strong>拖拽排序：</strong>按住 ☰ 图标拖动消息调整顺序</li>
+                    <li><strong>编辑内容：</strong>点击 ✎ 图标或直接点击文本编辑</li>
+                    <li><strong>删除消息：</strong>点击 🗑 图标删除单条消息</li>
+                    <li><strong>保存：</strong>处理完成后保存到 5-Ordered 目录</li>
                 </ul>
             </div>
 
             <div class="shortcuts">
                 <div class="shortcuts-title">⌨️ 快捷键</div>
                 <div class="shortcut-item">
-                    <span>Ctrl + A</span>
-                    <kbd>全选</kbd>
-                </div>
-                <div class="shortcut-item">
                     <span>Ctrl + Z</span>
                     <kbd>撤销</kbd>
                 </div>
                 <div class="shortcut-item">
-                    <span>Shift + 点击</span>
-                    <kbd>范围选择</kbd>
+                    <span>Ctrl + Y / Ctrl+Shift+Z</span>
+                    <kbd>重做</kbd>
+                </div>
+                <div class="shortcut-item">
+                    <span>Enter</span>
+                    <kbd>完成编辑</kbd>
+                </div>
+                <div class="shortcut-item">
+                    <span>Escape</span>
+                    <kbd>取消编辑</kbd>
                 </div>
             </div>
         </div>
@@ -718,43 +756,35 @@
     <script>
         // 全局状态
         let currentDirectory = null;
-        let cleansingDirectory = null;
+        let orderedDirectory = null;
         let currentFile = null;
         let messages = [];
+        let originalMessages = [];
         let history = [];
-        let selectedIndices = new Set();
-        let lastSelectedIndex = -1;
-        
-        // 分批加载相关状态
-        const BATCH_SIZE = 100; // 每批加载100行
-        let allLines = []; // 存储所有原始行
-        let loadedCount = 0; // 已加载的消息数
-        let isLoadingMore = false; // 是否正在加载更多
-        let fileContent = ''; // 完整文件内容（用于保存时重新生成）
+        let historyIndex = -1;
+        let draggedItem = null;
+        let editingIndex = -1;
+        let editingOriginalText = '';
 
         // DOM 元素
         const fileSelect = document.getElementById('fileSelect');
         const chatContainer = document.getElementById('chatContainer');
         const outputPreview = document.getElementById('outputPreview');
-        const mergeBtn = document.getElementById('mergeBtn');
-        const deleteBtn = document.getElementById('deleteBtn');
-        const undoBtn = document.getElementById('undoBtn');
         const saveBtn = document.getElementById('saveBtn');
-        const mergePreview = document.getElementById('mergePreview');
-        const mergePreviewContent = document.getElementById('mergePreviewContent');
+        const undoBtn = document.getElementById('undoBtn');
+        const redoBtn = document.getElementById('redoBtn');
+        const resetBtn = document.getElementById('resetBtn');
 
         // 选择目录
         async function selectDirectory() {
             try {
-                // 请求用户选择 3-Divided 目录
                 const dirHandle = await window.showDirectoryPicker();
                 currentDirectory = dirHandle;
                 
-                // 检查目录名是否包含 "Divided"
                 const dirName = dirHandle.name;
-                if (!dirName.includes('Divided')) {
+                if (!dirName.includes('Cleansing') || !dirName.includes('Translate')) {
                     showModal('⚠️ 警告', 
-                        `您选择的目录是 "${dirName}"，建议命名为 "3-Divided"。\n\n是否继续？`, 
+                        `您选择的目录是 "${dirName}"，建议命名为包含 "Cleansing" 的目录。\n\n是否继续？`, 
                         [
                             { text: '重新选择', action: () => { currentDirectory = null; closeModal(); } },
                             { text: '继续', action: () => { closeModal(); loadFilesFromDirectory(); } }
@@ -765,20 +795,19 @@
                 
                 await loadFilesFromDirectory();
                 
-                // 尝试获取或请求 4-Cleansing 目录
+                // 尝试获取 5-Ordered 目录
                 try {
-                    // 尝试在同级目录找 4-Cleansing
                     const parentHandle = await dirHandle.getParent?.();
                     if (parentHandle) {
                         for await (const entry of parentHandle.values()) {
-                            if (entry.kind === 'directory' && entry.name.includes('Cleansing')) {
-                                cleansingDirectory = entry;
+                            if (entry.kind === 'directory' && entry.name.includes('Ordered')) {
+                                orderedDirectory = entry;
                                 break;
                             }
                         }
                     }
                 } catch (e) {
-                    console.log('无法自动定位 4-Cleansing 目录');
+                    console.log('无法自动定位 5-Ordered 目录');
                 }
                 
             } catch (err) {
@@ -812,14 +841,10 @@
                     const option = document.createElement('option');
                     option.value = index;
                     option.textContent = file.name;
-                    option.dataset.handle = JSON.stringify(file.name);
                     fileSelect.appendChild(option);
                 });
                 
                 fileSelect.disabled = false;
-                fileSelect.dataset.files = JSON.stringify(jsonlFiles.map(f => f.name));
-                
-                // 存储文件句柄
                 window.jsonlFileHandles = jsonlFiles;
                 
                 updateStatus(`已加载 ${jsonlFiles.length} 个文件`, 'success');
@@ -849,6 +874,7 @@
                 currentFile = fileHandle;
                 
                 parseJsonl(content);
+                saveOriginalState();
                 renderChat();
                 updateOutput();
                 updateStats();
@@ -861,86 +887,38 @@
             }
         }
 
-        // 解析 JSONL（分批加载版本）
+        // 解析 JSONL
         function parseJsonl(content) {
-            // 存储完整内容用于后续保存
-            fileContent = content;
-            
-            // 分割所有行但不立即解析
-            allLines = content.trim().split('\n').filter(line => line.trim());
             messages = [];
-            loadedCount = 0;
+            const lines = content.trim().split('\n');
             
-            // 先加载第一批
-            loadMoreMessages(BATCH_SIZE);
-            
-            selectedIndices.clear();
-            lastSelectedIndex = -1;
-            history = [];
-        }
-        
-        // 加载更多消息
-        function loadMoreMessages(count = BATCH_SIZE) {
-            const startIndex = loadedCount;
-            const endIndex = Math.min(startIndex + count, allLines.length);
-            
-            for (let i = startIndex; i < endIndex; i++) {
-                const line = allLines[i];
+            lines.forEach((line, index) => {
+                if (!line.trim()) return;
+                
                 try {
                     const data = JSON.parse(line);
                     messages.push({
-                        id: i,
-                        originalId: i,
+                        id: index,
+                        originalId: index,
                         name: data.name || '未知用户',
                         text: data.text || '',
                         raw: line,
-                        deleted: false,
-                        merged: false,
-                        mergedFrom: []
+                        edited: false,
+                        deleted: false
                     });
                 } catch (e) {
-                    console.warn(`解析第 ${i + 1} 行失败:`, line);
+                    console.warn(`解析第 ${index + 1} 行失败:`, line);
                 }
-            }
+            });
             
-            loadedCount = endIndex;
-            
-            // 更新状态栏显示加载进度
-            const statusText = document.getElementById('statusText');
-            if (loadedCount < allLines.length) {
-                updateStatus(`已加载 ${loadedCount}/${allLines.length} 条消息`, 'info');
-            } else {
-                updateStatus(`已加载全部 ${allLines.length} 条消息`, 'success');
-            }
-            
-            return endIndex - startIndex; // 返回实际加载的数量
+            editingIndex = -1;
+            history = [];
+            historyIndex = -1;
         }
-        
-        // 检查是否需要加载更多（滚动到底部时）
-        function checkLoadMore() {
-            if (isLoadingMore || loadedCount >= allLines.length) return;
-            
-            const container = chatContainer;
-            const scrollBottom = container.scrollTop + container.clientHeight;
-            const threshold = container.scrollHeight - 200; // 距离底部200px时触发
-            
-            if (scrollBottom >= threshold) {
-                isLoadingMore = true;
-                const previousScrollHeight = container.scrollHeight;
-                
-                // 加载下一批
-                loadMoreMessages(BATCH_SIZE);
-                
-                // 重新渲染
-                renderChat();
-                updateOutput();
-                updateStats();
-                
-                // 保持滚动位置，避免跳转到顶部
-                container.scrollTop = container.scrollHeight - previousScrollHeight + container.scrollTop - 100;
-                
-                isLoadingMore = false;
-            }
+
+        // 保存原始状态
+        function saveOriginalState() {
+            originalMessages = JSON.parse(JSON.stringify(messages));
         }
 
         // 渲染聊天列表
@@ -962,236 +940,256 @@
                 if (msg.deleted) return;
                 
                 visibleCount++;
-                const isSelected = selectedIndices.has(index);
+                const isEditing = index === editingIndex;
                 const isImage = msg.text.match(/\[图片:[\w.]+\]/);
-                const displayText = isImage 
-                    ? `<span class="message-image">${msg.text}</span>`
-                    : `<span class="message-text">${escapeHtml(msg.text)}</span>`;
-                
-                // 判断是否是连续相同发送者的消息
-                const prevMsg = getPreviousVisibleMessage(index);
-                const isOwn = prevMsg && prevMsg.name === msg.name;
-                const isAtri = msg.name === '哈基亚';
+                const isAtri = msg.name === '亚托莉';
                 
                 html += `
-                    <div class="message-item ${isSelected ? 'selected' : ''} ${isOwn ? 'own-message' : ''} ${isAtri ? 'atri-message' : ''}" 
+                    <div class="message-item ${isEditing ? 'editing' : ''} ${isAtri ? 'atri-message' : ''}" 
                          data-index="${index}"
-                         onclick="handleMessageClick(event, ${index})">
+                         draggable="true"
+                         ondragstart="handleDragStart(event, ${index})"
+                         ondragover="handleDragOver(event, ${index})"
+                         ondrop="handleDrop(event, ${index})"
+                         ondragend="handleDragEnd(event)">
+                        <span class="edit-indicator">编辑中</span>
+                        <span class="drag-handle">☰</span>
                         <span class="message-index">${visibleCount}</span>
-                        <input type="checkbox" 
-                               class="message-checkbox" 
-                               ${isSelected ? 'checked' : ''}
-                               onclick="event.stopPropagation(); toggleSelection(${index})">
                         <div class="message-content">
-                            ${!isOwn ? `<div class="message-sender">${escapeHtml(msg.name)}</div>` : ''}
+                            <div class="message-sender">${escapeHtml(msg.name)}</div>
                             <div class="message-bubble">
-                                ${displayText}
+                                <div class="message-text ${isImage ? 'message-image' : ''}" 
+                                     contenteditable="${isEditing}"
+                                     ondblclick="startEdit(${index})"
+                                     onkeydown="handleEditKeydown(event, ${index})"
+                                     onblur="finishEdit(${index})"
+                                     id="text-${index}">${isImage ? msg.text : escapeHtml(msg.text)}</div>
                             </div>
+                        </div>
+                        <div class="message-actions">
+                            <button class="msg-btn edit-btn" onclick="startEdit(${index})" title="编辑">✎</button>
+                            <button class="msg-btn delete-btn" onclick="deleteMessage(${index})" title="删除">🗑</button>
                         </div>
                     </div>
                 `;
             });
             
-            // 添加"加载更多"提示和按钮
-            if (loadedCount < allLines.length) {
-                html += `
-                    <div class="load-more-indicator" style="text-align: center; padding: 20px; color: #7f8c8d; font-size: 13px; border-top: 1px dashed #ddd; margin-top: 10px;">
-                        <div>⬇️ 向下滚动加载更多 (${loadedCount}/${allLines.length} 已加载)</div>
-                        <button onclick="loadAllRemaining()" style="margin-top: 10px; padding: 6px 16px; background: #3498db; color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">加载全部剩余</button>
-                    </div>
-                `;
-            }
-            
             chatContainer.innerHTML = html;
-            document.getElementById('messageCount').textContent = `${visibleCount} 条消息${loadedCount < allLines.length ? ' (还有更多)' : ''}`;
+            document.getElementById('messageCount').textContent = `${visibleCount} 条消息`;
         }
 
-        // 获取前一个可见消息
-        function getPreviousVisibleMessage(currentIndex) {
-            for (let i = currentIndex - 1; i >= 0; i--) {
-                if (!messages[i].deleted) {
-                    return messages[i];
-                }
+        // 拖拽功能
+        function handleDragStart(event, index) {
+            draggedItem = index;
+            event.target.classList.add('dragging');
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', index);
+        }
+
+        function handleDragOver(event, index) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            
+            if (draggedItem !== null && draggedItem !== index) {
+                event.currentTarget.classList.add('drag-over');
             }
-            return null;
         }
 
-        // 处理消息点击
-        function handleMessageClick(event, index) {
-            if (event.shiftKey && lastSelectedIndex !== -1) {
-                // Shift + 点击 = 范围选择
-                const start = Math.min(lastSelectedIndex, index);
-                const end = Math.max(lastSelectedIndex, index);
-                for (let i = start; i <= end; i++) {
-                    if (!messages[i].deleted) {
-                        selectedIndices.add(i);
-                    }
+        function handleDrop(event, index) {
+            event.preventDefault();
+            event.currentTarget.classList.remove('drag-over');
+            
+            const fromIndex = parseInt(event.dataTransfer.getData('text/plain'));
+            
+            if (fromIndex !== index && !isNaN(fromIndex)) {
+                saveHistory();
+                
+                // 交换位置
+                const item = messages.splice(fromIndex, 1)[0];
+                messages.splice(index, 0, item);
+                
+                renderChat();
+                updateOutput();
+                updateStats();
+            }
+        }
+
+        function handleDragEnd(event) {
+            event.target.classList.remove('dragging');
+            document.querySelectorAll('.message-item').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+            draggedItem = null;
+        }
+
+        // 编辑功能
+        function startEdit(index) {
+            if (editingIndex !== -1 && editingIndex !== index) {
+                finishEdit(editingIndex);
+            }
+            
+            editingIndex = index;
+            editingOriginalText = messages[index].text;
+            renderChat();
+            
+            // 聚焦并选中全部
+            setTimeout(() => {
+                const textEl = document.getElementById(`text-${index}`);
+                if (textEl) {
+                    textEl.focus();
+                    const range = document.createRange();
+                    range.selectNodeContents(textEl);
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
                 }
-            } else {
-                // 普通点击 = 切换选择
-                if (selectedIndices.has(index)) {
-                    selectedIndices.delete(index);
-                    lastSelectedIndex = -1;
-                } else {
-                    selectedIndices.add(index);
-                    lastSelectedIndex = index;
+            }, 10);
+        }
+
+        function finishEdit(index) {
+            if (editingIndex !== index) return;
+            
+            const textEl = document.getElementById(`text-${index}`);
+            if (textEl) {
+                const newText = textEl.innerText.trim();
+                
+                if (newText !== messages[index].text) {
+                    saveHistory();
+                    messages[index].text = newText;
+                    messages[index].edited = true;
+                    messages[index].raw = JSON.stringify({
+                        name: messages[index].name,
+                        text: newText
+                    });
                 }
             }
             
+            editingIndex = -1;
+            editingOriginalText = '';
             renderChat();
+            updateOutput();
             updateStats();
-            updateButtons();
-            updateMergePreview();
         }
 
-        // 切换选择
-        function toggleSelection(index) {
-            if (selectedIndices.has(index)) {
-                selectedIndices.delete(index);
-                lastSelectedIndex = -1;
-            } else {
-                selectedIndices.add(index);
-                lastSelectedIndex = index;
+        function handleEditKeydown(event, index) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                finishEdit(index);
+            } else if (event.key === 'Escape') {
+                messages[index].text = editingOriginalText;
+                editingIndex = -1;
+                editingOriginalText = '';
+                renderChat();
             }
-            
+        }
+
+        // 删除消息
+        function deleteMessage(index) {
+            saveHistory();
+            messages[index].deleted = true;
             renderChat();
+            updateOutput();
             updateStats();
             updateButtons();
-            updateMergePreview();
+        }
+
+        // 历史记录管理
+        function saveHistory() {
+            // 删除当前位置之后的历史
+            history = history.slice(0, historyIndex + 1);
+            
+            // 保存当前状态
+            history.push(JSON.parse(JSON.stringify(messages)));
+            
+            // 只保留最近 20 步
+            if (history.length > 20) {
+                history.shift();
+            } else {
+                historyIndex++;
+            }
+            
+            updateStats();
+            updateButtons();
+        }
+
+        function undoLastAction() {
+            if (historyIndex < 0) return;
+            
+            if (historyIndex === history.length - 1) {
+                // 保存当前状态以便重做
+                history.push(JSON.parse(JSON.stringify(messages)));
+            }
+            
+            historyIndex--;
+            messages = JSON.parse(JSON.stringify(history[historyIndex]));
+            
+            editingIndex = -1;
+            renderChat();
+            updateOutput();
+            updateStats();
+            updateButtons();
+            
+            updateStatus('已撤销', 'success');
+        }
+
+        function redoLastAction() {
+            if (historyIndex >= history.length - 2) return;
+            
+            historyIndex++;
+            messages = JSON.parse(JSON.stringify(history[historyIndex]));
+            
+            editingIndex = -1;
+            renderChat();
+            updateOutput();
+            updateStats();
+            updateButtons();
+            
+            updateStatus('已重做', 'success');
+        }
+
+        function resetOrder() {
+            showModal('⚠️ 确认', '确定要恢复原始顺序吗？所有编辑和排序都将丢失。', [
+                { text: '取消', action: closeModal },
+                { text: '确定', action: () => {
+                    saveHistory();
+                    messages = JSON.parse(JSON.stringify(originalMessages));
+                    editingIndex = -1;
+                    renderChat();
+                    updateOutput();
+                    updateStats();
+                    closeModal();
+                    updateStatus('已恢复原始顺序', 'success');
+                }}
+            ]);
         }
 
         // 更新统计
         function updateStats() {
             const visible = messages.filter(m => !m.deleted).length;
-            const selected = selectedIndices.size;
-            const merged = messages.filter(m => m.merged).length;
-            const deleted = messages.filter(m => m.deleted).length;
+            const edited = messages.filter(m => m.edited).length;
+            const isReordered = messages.some((m, i) => {
+                const visibleMsgs = messages.filter(msg => !msg.deleted);
+                const originalVisible = originalMessages.filter(msg => !msg.deleted);
+                return visibleMsgs[i] && originalVisible[i] && visibleMsgs[i].id !== originalVisible[i].id;
+            });
             
             document.getElementById('statTotal').textContent = visible;
-            document.getElementById('statSelected').textContent = selected;
-            document.getElementById('statMerged').textContent = merged;
-            document.getElementById('statDeleted').textContent = deleted;
+            document.getElementById('statEdited').textContent = edited;
+            document.getElementById('statReordered').textContent = isReordered ? '是' : '否';
+            document.getElementById('statHistory').textContent = `${historyIndex + 1}/${history.length}`;
         }
 
         // 更新按钮状态
         function updateButtons() {
-            const hasSelection = selectedIndices.size > 0;
-            const hasHistory = history.length > 0;
             const hasContent = messages.length > 0;
+            const hasHistory = historyIndex >= 0;
+            const canRedo = historyIndex < history.length - 2 || 
+                          (historyIndex === history.length - 2 && history.length > 0);
             
-            mergeBtn.disabled = selectedIndices.size < 2;
-            deleteBtn.disabled = !hasSelection;
-            undoBtn.disabled = !hasHistory;
             saveBtn.disabled = !hasContent;
-        }
-
-        // 更新合并预览
-        function updateMergePreview() {
-            if (selectedIndices.size < 2) {
-                mergePreview.style.display = 'none';
-                return;
-            }
-            
-            const indices = Array.from(selectedIndices).sort((a, b) => a - b);
-            let mergedText = '';
-            
-            indices.forEach((idx, i) => {
-                if (i > 0) mergedText += '\\n';
-                mergedText += messages[idx].text;
-            });
-            
-            mergePreviewContent.textContent = mergedText.substring(0, 200) + (mergedText.length > 200 ? '...' : '');
-            mergePreview.style.display = 'block';
-        }
-
-        // 合并选中的消息
-        function mergeSelected() {
-            if (selectedIndices.size < 2) return;
-            
-            const indices = Array.from(selectedIndices).sort((a, b) => a - b);
-            const firstIndex = indices[0];
-            
-            // 保存历史
-            saveHistory();
-            
-            // 合并文本
-            let mergedText = '';
-            const mergedFrom = [];
-            
-            indices.forEach((idx, i) => {
-                if (i > 0) mergedText += '\\n';
-                mergedText += messages[idx].text;
-                if (idx !== firstIndex) {
-                    mergedFrom.push(idx);
-                    messages[idx].deleted = true;
-                }
-            });
-            
-            messages[firstIndex].text = mergedText;
-            messages[firstIndex].merged = true;
-            messages[firstIndex].mergedFrom = mergedFrom;
-            
-            selectedIndices.clear();
-            lastSelectedIndex = -1;
-            
-            renderChat();
-            updateOutput();
-            updateStats();
-            updateButtons();
-            updateMergePreview();
-            
-            updateStatus(`已合并 ${indices.length} 条消息`, 'success');
-        }
-
-        // 删除选中的消息
-        function deleteSelected() {
-            if (selectedIndices.size === 0) return;
-            
-            saveHistory();
-            
-            selectedIndices.forEach(idx => {
-                messages[idx].deleted = true;
-            });
-            
-            selectedIndices.clear();
-            lastSelectedIndex = -1;
-            
-            renderChat();
-            updateOutput();
-            updateStats();
-            updateButtons();
-            
-            updateStatus(`已删除 ${selectedIndices.size} 条消息`, 'success');
-        }
-
-        // 保存历史（用于撤销）
-        function saveHistory() {
-            const snapshot = messages.map(m => ({
-                ...m,
-                mergedFrom: [...m.mergedFrom]
-            }));
-            history.push(snapshot);
-            
-            // 只保留最近 10 步
-            if (history.length > 10) {
-                history.shift();
-            }
-        }
-
-        // 撤销
-        function undoLastAction() {
-            if (history.length === 0) return;
-            
-            messages = history.pop();
-            selectedIndices.clear();
-            lastSelectedIndex = -1;
-            
-            renderChat();
-            updateOutput();
-            updateStats();
-            updateButtons();
-            
-            updateStatus('已撤销上次操作', 'success');
+            undoBtn.disabled = !hasHistory;
+            redoBtn.disabled = !canRedo;
+            resetBtn.disabled = !hasContent;
         }
 
         // 更新输出预览
@@ -1214,10 +1212,10 @@
                     name: msg.name,
                     text: msg.text
                 };
-                const raw = JSON.stringify(output, null, 0);
+                const raw = JSON.stringify(output);
                 
                 html += `
-                    <div class="output-item ${msg.merged ? 'merged' : ''}">
+                    <div class="output-item ${msg.edited ? 'edited' : ''}">
                         <div class="output-item-raw">${escapeHtml(raw)}</div>
                     </div>
                 `;
@@ -1226,51 +1224,46 @@
             outputPreview.innerHTML = html;
         }
 
-        // 保存到 4-Cleansing
-        async function saveToCleansing() {
+        // 保存到 5-Ordered
+        async function saveToOrdered() {
             const visibleMessages = messages.filter(m => !m.deleted);
             if (visibleMessages.length === 0) {
                 showError('没有内容可保存');
                 return;
             }
             
-            // 生成 JSONL 内容
             const lines = visibleMessages.map(m => JSON.stringify({
                 name: m.name,
                 text: m.text
             }));
-            const content = lines.join('\\n');
+            const content = lines.join('\n');
             
             try {
-                let targetDir = cleansingDirectory;
+                let targetDir = orderedDirectory;
                 
-                // 如果没有保存目录，请求用户选择
                 if (!targetDir) {
                     try {
                         targetDir = await window.showDirectoryPicker();
-                        cleansingDirectory = targetDir;
+                        orderedDirectory = targetDir;
                     } catch (err) {
                         if (err.name === 'AbortError') return;
                         throw err;
                     }
                 }
                 
-                // 生成文件名
                 const originalName = currentFile ? currentFile.name : 'chat.jsonl';
-                const baseName = originalName.replace('.jsonl', '');
-                const newName = `${baseName}_cleansed.jsonl`;
+                const baseName = originalName.replace('.jsonl', '').replace('_cleansed', '');
+                const newName = `${baseName}_ordered.jsonl`;
                 
-                // 创建文件
                 const newFileHandle = await targetDir.getFileHandle(newName, { create: true });
                 const writable = await newFileHandle.createWritable();
                 await writable.write(content);
                 await writable.close();
                 
                 updateStatus(`已保存: ${newName}`, 'success');
-                showModal('✅ 保存成功', `文件已保存到 4-Cleansing 目录:\\n${newName}`);
+                showModal('✅ 保存成功', `文件已保存到 5-Ordered 目录:\n${newName}`);
                 
             } catch (err) {
-                // 如果 API 不支持，提供下载
                 if (err.name === 'SecurityError' || err.name === 'TypeError') {
                     downloadOutput();
                 } else {
@@ -1288,14 +1281,14 @@
                 name: m.name,
                 text: m.text
             }));
-            const content = lines.join('\\n');
+            const content = lines.join('\n');
             
             const blob = new Blob([content], { type: 'application/jsonl' });
             const url = URL.createObjectURL(blob);
             
             const originalName = currentFile ? currentFile.name : 'chat.jsonl';
-            const baseName = originalName.replace('.jsonl', '');
-            const newName = `${baseName}_cleansed.jsonl`;
+            const baseName = originalName.replace('.jsonl', '').replace('_cleansed', '');
+            const newName = `${baseName}_ordered.jsonl`;
             
             const a = document.createElement('a');
             a.href = url;
@@ -1317,7 +1310,7 @@
                 name: m.name,
                 text: m.text
             }));
-            const content = lines.join('\\n');
+            const content = lines.join('\n');
             
             navigator.clipboard.writeText(content).then(() => {
                 updateStatus('已复制到剪贴板', 'success');
@@ -1326,33 +1319,13 @@
             });
         }
 
-        // 加载全部剩余消息
-        function loadAllRemaining() {
-            if (isLoadingMore || loadedCount >= allLines.length) return;
-            
-            isLoadingMore = true;
-            updateStatus('正在加载全部消息...', 'info');
-            
-            // 使用 setTimeout 避免阻塞 UI
-            setTimeout(() => {
-                const remaining = allLines.length - loadedCount;
-                loadMoreMessages(remaining);
-                
-                renderChat();
-                updateOutput();
-                updateStats();
-                
-                isLoadingMore = false;
-                updateStatus(`已加载全部 ${allLines.length} 条消息`, 'success');
-            }, 10);
-        }
-
         // 清空聊天
         function clearChat() {
             messages = [];
-            selectedIndices.clear();
-            lastSelectedIndex = -1;
+            originalMessages = [];
+            editingIndex = -1;
             history = [];
+            historyIndex = -1;
             
             chatContainer.innerHTML = `
                 <div class="empty-state">
@@ -1383,7 +1356,8 @@
             const statusText = document.getElementById('statusText');
             statusText.textContent = text;
             statusText.className = type === 'success' ? 'status-success' : 
-                                  type === 'error' ? 'status-error' : 'status-info';
+                                  type === 'error' ? 'status-error' : 
+                                  type === 'warning' ? 'status-warning' : 'status-info';
         }
 
         function showError(message) {
@@ -1418,36 +1392,17 @@
 
         // 键盘快捷键
         document.addEventListener('keydown', function(e) {
-            if (e.ctrlKey && e.key === 'a') {
-                e.preventDefault();
-                // 全选所有可见消息
-                messages.forEach((m, i) => {
-                    if (!m.deleted) {
-                        selectedIndices.add(i);
-                    }
-                });
-                renderChat();
-                updateStats();
-                updateButtons();
-                updateMergePreview();
-            }
-            
             if (e.ctrlKey && e.key === 'z') {
                 e.preventDefault();
                 undoLastAction();
+            } else if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'Z')) {
+                e.preventDefault();
+                redoLastAction();
             }
         });
 
-        // 滚动监听 - 实现自动加载更多
-        chatContainer.addEventListener('scroll', function() {
-            // 使用 requestAnimationFrame 优化滚动性能
-            requestAnimationFrame(() => {
-                checkLoadMore();
-            });
-        });
-
         // 初始化
-        updateStatus('请选择 3-Divided 目录');
+        updateStatus('请选择 4-Cleansing\\Translate 目录');
     </script>
 </body>
 </html>
